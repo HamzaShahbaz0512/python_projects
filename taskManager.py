@@ -40,11 +40,11 @@ def Update_task(name,depend_on,difficulty,status):
         return
     
     if(status=="completed"):
-        for t in tasks.values():
-            if t.status!="completed":
-                print(f"Cannot mark {name} as completed because dependent task {t.name} is not completed")
-                return
-    
+        dep=tasks[name].depend_on
+        print(f"Parent task is {dep}")
+        if dep and tasks[dep].status!="completed":
+            print(f"Cannot mark {name} as completed because dependent task {dep} is not completed")
+            return
     if name:
         task=tasks[name]
     if depend_on:
