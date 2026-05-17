@@ -2,11 +2,22 @@ from flask import Flask,jsonify,request
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended import create_access_token
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_jwt_extended import jwt_required
+
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"]="sqlite:///project.db"
+app.config["SQLALCHEMY_DATABASE_URI"]="sqlite:///pipt.db"
 db=SQLAlchemy(app)
 
+
+class User(db.Model):
+    id:Mapped[int]=db.Column(db.Integer,primary_key=True)
+    name:Mapped[str]=db.Column(db.String(100),nullable=False)
+    password:Mapped[str]=db.Column(db.String(100),nullable=False)
+    
 class Task(db.Model):
     id:Mapped[int]=db.Column(db.Integer,primary_key=True)
     name:Mapped[str]=db.Column(db.String(100),nullable=False)
@@ -17,9 +28,42 @@ class Task(db.Model):
 
 with app.app_context():
     db.create_all()
-    
+app.config['JWT_SECRET_KEY']='1A2B3C4D'
+JWT = JWTManager(app)
+
 print("Database created successfully")
 
+#Create User
+@app.route('/register',methods=["POST"])
+def add_user():
+    data=request.get_json()
+    id=data.get('id')
+    name=data.get("name")
+    password=data.get("password")
+    
+    if(User.query.filter_by(name=name).first()):
+        return jsonify({'error':'User with this name already exists'}),400
+
+    hashed_password=generate_password_hash(password)
+    
+
+    new_user=User(id=id,name=name,password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': f'User registered {id} added'}),201
+
+#Login User
+@app.route('/login',methods=["POST"])
+def login_user():
+    data=request.get_json()
+    name=data.get("name")
+    password=data.get("password")
+
+    user=User.query.filter_by(name=name).first()
+    if not name or not check_password_hash(user.password,password):
+        return jsonify({"error":"Invalid user credentials"}),401
+    token = create_access_token(identity=str(name))
+    return jsonify({"message": "Login successful", "token": token}), 200
 
 #create task
 @app.route('/tasks',methods=["POST"])
@@ -41,6 +85,7 @@ def add_tasks():
 
 #Get all tasks
 @app.route('/tasks',methods=['GET'])
+@jwt_required()
 def get_tasks():
     tasks=Task.query.all()
     print("task is : ",tasks)
@@ -101,89 +146,3 @@ def delete_task(id):
 
 if(__name__=='__main__'):
     app.run(debug=True)
-
-'''
-class Task:
-    def __init__(self,id,name,depend_on=None,Difficulty=None,status="pending"):
-        self.id=id
-        self.name=name
-        self.depend_on=depend_on
-        self.difficulty=Difficulty
-        self.status=status
-        
-tasks = {}
-'''
-#Get all items
-'''
-
-@app.route('/tasks',methods=['GET'])
-def get_tasks():
-    result = {}
-    for id, task in tasks.items():
-        result[id] = {
-            "id":task.id,
-            "name": task.name,
-            "depend_on": task.depend_on,
-            "difficulty": task.difficulty,
-            "status": task.status
-        }
-    return jsonify(result)
-
-#Create an item
-
-@app.route('/tasks',methods=['POST'])
-def add_Task():
-    data = request.get_json()
-    id=data.get('id')
-    name=data.get('name')
-    if id in tasks:
-        return jsonify({'error':'Task already exists'}) ,400
-    tasks[id] = Task(id,name)
-    tasks[id].depend_on=data.get("depend_on")
-    tasks[id].difficulty=data.get("difficulty")
-    tasks[id].status=data.get("status")
-    return jsonify({'message': f'Task {id} added'}), 201
-
-#Update a specific item
-@app.route('/tasks/<id>',methods=['PUT'])
-
-def update_task(id):
-    data=request.get_json()
-    if id not in tasks:
-        return jsonify({'error':'Task not found'}), 404
-    
-    if data.get('name'):
-        tasks[id].name = data.get('name')
-    if data.get('depend_on'):
-        tasks[id].depend_on = data.get('depend_on')
-    if data.get('difficulty'):
-        tasks[id].difficulty = data.get('difficulty')
-    if data.get('status'):
-        tasks[id].status = data.get('status')
-    return jsonify({'message': f'Task {id} updated'})
-
-#Get a specific item. Added some lines to the comment
-@app.route('/tasks/<id>',methods=['GET'])
-
-def get_item(id):
-    if id not in tasks:
-        return jsonify({'error':'Task not found'}), 404
-    data1={
-        "id": tasks[id].id,
-        "name": tasks[id].name,
-        "depend_on": tasks[id].depend_on,
-        "difficulty": tasks[id].difficulty,
-        "status": tasks[id].status
-    }
-    return jsonify(data1)
-@app.route('/tasks/<id>',methods=['DELETE'])
-
-def delete_task(id):
-    if id not in tasks:
-        return jsonify({'error':'Task not found'}), 404
-    del tasks[id]
-    return jsonify({'message': f'Task {id} deleted'})
-
-if(__name__=='__main__'):
-    app.run(debug=True)
-    '''
